@@ -27,18 +27,24 @@ if __name__ == "__main__":
     D2 = generate_cluster(args.theda[4], args.theda[5], args.theda[6], args.theda[7],  args.num_data)
     D = np.concatenate((D1, D2))
     W_gradient, W_newton = np.random.uniform(size=3), np.random.uniform(size=3)  # shape (1X3)
-
+    print (W_gradient.shape)
     X = list()
     for dp in D:
         d = list(np.concatenate((np.array([1]), dp)))
         X.append(d)
     X = np.array(X) # shape (num_dataX3)
-    Y =  np.array([1] * args.num_data + [2] * args.num_data)
+    Y =  np.array([0] * args.num_data + [1] * args.num_data)
 
     step = np.dot(X.T, (Y - 1 / (1 + np.exp(-np.dot(X, W_gradient))))) #steepest gradient descent
     W_gradient_pos = W_gradient + step
     while not np.allclose(W_gradient, W_gradient_pos, atol=0.001):
-        step = np.dot(X.T, (Y - 1 / (1 + np.exp(-np.dot(X, W_gradient)))))
-        print (step)
-        W_gradient_pos, W_gradient = W_gradient + step, W_gradient_pos
+        W_gradient = W_gradient_pos
+        step = np.dot(X.T, (Y - 1 / (1 + np.exp(-1 * np.dot(X, W_gradient)))))
+        # print (step)
+        print (W_gradient)
+        # print (1 / (1 + np.exp(-np.dot(X, W_gradient))))
+        W_gradient_pos = W_gradient + step * 0.1
 
+    res = 1 / (1 + np.exp(-1 * np.dot(X, W_gradient)))
+    predict = [1 if x < 0.5 else 2 for x in res]
+    print (predict)
