@@ -35,10 +35,24 @@ if __name__ == "__main__":
     X = np.array(X) # shape (num_dataX3)
     Y =  np.array([1] * args.num_data + [2] * args.num_data)
 
-    step = np.dot(X.T, (Y - 1 / (1 + np.exp(-np.dot(X, W_gradient))))) #steepest gradient descent
-    W_gradient_pos = W_gradient + step
-    while not np.allclose(W_gradient, W_gradient_pos, atol=0.001):
-        step = np.dot(X.T, (Y - 1 / (1 + np.exp(-np.dot(X, W_gradient)))))
-        print (step)
-        W_gradient_pos, W_gradient = W_gradient + step, W_gradient_pos
 
+    res = 1 / (1 + np.exp(-np.dot(X, W_gradient)))
+    predict = np.array([2 if x > 0.5 else 1 for x in res])
+
+    step = np.dot(X.T, (Y - predict)) #steepest gradient descent
+    count = 0
+    W_gradient_pos = W_gradient + step
+    while not np.array_equal(Y - predict, np.array([0] * args.num_data)):
+        W_gradient = W_gradient_pos
+        res = 1 / (1 + np.exp(-np.dot(X, W_gradient)))
+        predict = np.array([2 if x > 0.5 else 1 for x in res])
+        step = np.dot(X.T, (Y - predict)) # yes=D2 no=D1
+        W_gradient_pos = W_gradient + step
+        count += 1
+        if count % 5000 == 0:
+            print(Y - predict)
+
+    res = 1 / (1 + np.exp(-np.dot(X, W_gradient)))
+    print (res)
+    predict = [2 if x > 0.5 else 1 for x in res]
+    print(predict)
