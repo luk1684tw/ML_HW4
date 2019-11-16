@@ -2,6 +2,7 @@ import argparse
 
 import numpy as np
 
+import matplotlib.pyplot as plt
 
 def generate_cluster(mean1, var1, mean2, var2, num_data):
     data_x = np.random.normal(mean1, var1, num_data)
@@ -34,6 +35,72 @@ def hassian_matrix(W, X, n):
     return np.dot(np.dot(X.T, T), X)
 
 
+def print_part1(result, num_data, w, method):
+
+    print (f"{method}:\n")
+    print ("W:")
+    print (w)
+    tp, fp, fn, tn = 0, 0, 0, 0
+    for i in range(2 * num_data):
+        if Y[i] == 0 and result[i] == 0:
+            tp += 1
+        elif Y[i] == 0 and result[i] == 1:
+            fn += 1
+        elif Y[i] == 1 and result[i] == 0:
+            fp += 1
+        else:
+            tn += 1
+    sensitivity = tp / (tp + fn)
+    specificity = tn / (tn + fp)
+
+    print ("confusion matrix:")
+    print ("                Predict cluster1      Predict cluster2")
+    print(f"  Is cluster 1               {tp}                   {fp}")
+    print(f"  Is cluster 2               {fn}                   {tn}")
+    print ("Sensitivity: ", sensitivity)
+    print ("Sepcificity: ", specificity)
+
+    return
+
+
+def plot_image(data_points, predict_gradient, predict_newton, num_data):
+    fig, ax = plt.subplots(1, 3)
+
+    ax[0].plot(data_points[:num_data, 0], data_points[:num_data, 1], 'bo')
+    ax[0].plot(data_points[num_data:, 0], data_points[num_data:, 1], 'ro')
+    ax[0].set_title("Ground Truth")
+
+    cluster1, cluster2 = list(), list()
+
+    for i in range(2 * num_data):
+        if predict_gradient[i] == 0:
+            cluster1.append(data_points[i])
+        else:
+            cluster2.append(data_points[i])
+    
+    cluster1 = np.array(cluster1)
+    cluster2 = np.array(cluster2)
+    ax[1].plot(cluster1[:, 0], cluster1[:, 1], 'bo')
+    ax[1].plot(cluster2[:, 0], cluster2[:, 1], 'ro')
+    ax[1].set_title("Gradient descent")
+
+    cluster1, cluster2 = list(), list()
+    for i in range(2 * num_data):
+        if predict_newton[i] == 0:
+            cluster1.append(data_points[i])
+        else:
+            cluster2.append(data_points[i])
+    cluster1 = np.array(cluster1)
+    cluster2 = np.array(cluster2)
+    ax[2].plot(cluster1[:, 0], cluster1[:, 1], 'bo')
+    ax[2].plot(cluster2[:, 0], cluster2[:, 1], 'ro')
+    ax[2].set_title("Newton's method")
+
+    plt.savefig("part1.png")
+
+    return
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-N", "--num_data", type=int, help="number of data points in logistic regression")
@@ -45,7 +112,7 @@ if __name__ == "__main__":
     D2 = generate_cluster(args.theda[4], args.theda[5], args.theda[6], args.theda[7],  args.num_data)
     D = np.concatenate((D1, D2))
     W_gradient, W_newton = np.random.uniform(size=3), np.random.uniform(size=3)
-    lr = 0.1
+    lr = 0.2
 
     X = list()
     for dp in D:
@@ -88,10 +155,14 @@ if __name__ == "__main__":
 
 
     res_gradient = 1 / (1 + np.exp(-1 * np.dot(X, W_gradient)))
-    predict_gradient = [1 if x < 0.5 else 2 for x in res_gradient]
-    print (predict_gradient)
+    predict_gradient = [0 if x < 0.5 else 1 for x in res_gradient]
+    print_part1(predict_gradient, args.num_data, W_gradient, "Gradient descent")
+
+    print ("\n---------------------------")
 
     res_newton = 1 / (1 + np.exp(-1 * np.dot(X, W_newton)))
-    predict_newton = [1 if x < 0.5 else 2 for x in res_newton]
-    print (predict_newton)
+    predict_newton = [0 if x < 0.5 else 1 for x in res_newton]
+    
+    print_part1(predict_newton, args.num_data, W_newton, "Newton's method")
 
+    plot_image(D, predict_gradient, predict_newton, args.num_data)
