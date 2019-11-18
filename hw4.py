@@ -1,6 +1,8 @@
 import argparse
+import struct
 
 import numpy as np
+import numba as nb
 
 import matplotlib.pyplot as plt
 
@@ -36,7 +38,6 @@ def hassian_matrix(W, X, n):
 
 
 def print_part1(result, num_data, w, method):
-
     print (f"{method}:\n")
     print ("W:")
     print (w)
@@ -50,13 +51,12 @@ def print_part1(result, num_data, w, method):
             fp += 1
         else:
             tn += 1
-    sensitivity = tp / (tp + fn)
-    specificity = tn / (tn + fp)
-
     print ("confusion matrix:")
     print ("                Predict cluster1      Predict cluster2")
-    print(f"  Is cluster 1               {tp}                   {fp}")
-    print(f"  Is cluster 2               {fn}                   {tn}")
+    print(f"  Is cluster 1               {tp}                   {fn}")
+    print(f"  Is cluster 2               {fp}                   {tn}")
+    sensitivity = tp / (tp + fn)
+    specificity = tn / (tn + fp)
     print ("Sensitivity: ", sensitivity)
     print ("Sepcificity: ", specificity)
 
@@ -101,6 +101,100 @@ def plot_image(data_points, predict_gradient, predict_newton, num_data):
     return
 
 
+def read_mnist(image_path, label_path):
+    with open(label_path, 'rb') as label:
+        magic, n = struct.unpack('>II', label.read(8))
+        labels = np.fromfile(label, dtype=np.uint8)
+    with open(image_path, 'rb') as image:
+        magic, num, rows, cols = struct.unpack('>IIII', image.read(16))
+        images = np.fromfile(image, dtype=np.uint8).reshape(len(labels), 784)
+
+    return images, labels
+
+
+@nb.jit()
+def e_step(p, lamb, train_images):
+    w = np.ones((60000, 10), dtype=np.float64)
+    for i in range(60000):
+        for idx, pixel in enumerate(train_images[i]):
+            if pixel == 1:
+                w[i, :] *= p[:, idx]
+            else:
+                w[i, :] *= (1 - p[:, idx])
+        w[i] *= lamb
+        w[i] /= np.sum(w[i])
+
+    return w
+
+
+@nb.jit()
+def m_step(w, train_images):
+    p = np.zeros((10, 784))
+    lamb = np.sum(w, axis=0) / len(train_images)
+    
+    for i in range(10):
+        for pixel in range(784):  
+            x = train_images[:, pixel] == 1
+            nominator = np.sum(w[x, i])
+
+            p[i, pixel] = nominator / np.sum(w[:, i])
+
+    return lamb, p
+
+
+def plot_mnist(p):
+    paras = np.copy(p)
+    paras.resize(10, 28, 28)
+    for idx, cluster in enumerate(paras):
+        print (f"class {idx}")
+        for i in cluster:
+            line = ""
+            for j in i:
+                if j >= 0.5:
+                    line += "1"
+                else:
+                    line += "0"
+            print (f"{line}\n")
+        print ('------------------------------')
+
+    return
+
+
+def em_algorithm():
+    global lamb, p, train_images, iteraton, pre_p
+    w = e_step(p, lamb, train_images)
+    lamb, p = m_step(w, train_images)
+    plot_mnist(p)
+    iteraton += 1
+    tmp = np.sum(np.abs(p - pre_p), axis=0)
+    difference = np.sum(tmp)
+    print (f"No. Iter{iteraton}, Difference: {difference}" )
+
+    return
+
+
+def make_confusion(result_mnist, label_mapping, train_labels):
+    for label, cluster in enumerate(label_mapping):
+        tp, fp, fn, tn = 0, 0, 0, 0
+        for i in range(60000):
+            if result_mnist[i] == cluster and train_labels[i] == label:
+                tp += 1
+            elif result_mnist[i] == cluster and train_labels[i] != label:
+                fp += 1
+            elif result_mnist[i] != cluster and train_labels[i] == label:
+                fn += 1
+            else:
+                tn += 1
+        print(f"confusion matrix of class{label}:")
+        print(f"                Predict class{label}    Predict not class{label}")
+        print(f"  Is  class {label}               {tp}                   {fn}")
+        print(f"  Not class {label}               {fp}                   {tn}")
+        sensitivity = tp / (tp + fn)
+        specificity = tn / (tn + fp)
+        print ("Sensitivity: ", sensitivity)
+        print ("Sepcificity: ", specificity)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-N", "--num_data", type=int, help="number of data points in logistic regression")
@@ -137,7 +231,6 @@ if __name__ == "__main__":
     W_newton_pos = np.random.uniform(size=3)
     counter = 0
     while not np.allclose(W_newton, W_newton_pos, atol=0.01):
-    # for i in range(1):
         if counter > 100000:
             break
         
@@ -156,13 +249,55 @@ if __name__ == "__main__":
 
     res_gradient = 1 / (1 + np.exp(-1 * np.dot(X, W_gradient)))
     predict_gradient = [0 if x < 0.5 else 1 for x in res_gradient]
-    print_part1(predict_gradient, args.num_data, W_gradient, "Gradient descent")
+    # print_part1(predict_gradient, args.num_data, W_gradient, "Gradient descent")
 
     print ("\n---------------------------")
 
     res_newton = 1 / (1 + np.exp(-1 * np.dot(X, W_newton)))
     predict_newton = [0 if x < 0.5 else 1 for x in res_newton]
     
-    print_part1(predict_newton, args.num_data, W_newton, "Newton's method")
-
+    # print_part1(predict_newton, args.num_data, W_newton, "Newton's method")
     plot_image(D, predict_gradient, predict_newton, args.num_data)
+
+    # part2
+    train_image = './train-images-idx3-ubyte'
+    train_label = './train-labels-idx1-ubyte'
+
+    train_images, train_labels = read_mnist(train_image, train_label)
+    lamb = np.random.uniform(0.05, 0.15, 10)
+    p = np.random.uniform(0.35, 0.65, 10*784)
+    p.resize(10, 784)
+    pre_p = np.copy(p)
+    train_images = train_images // 128
+    iteraton = 0
+    em_algorithm()
+    
+    while not np.allclose(p, pre_p, atol=0.001):
+        pre_p = np.copy(p)
+        em_algorithm()
+
+    predict_mnist = e_step(p, lamb, train_images)
+    
+    result_mnist = np.argmax(predict_mnist, axis=1)
+    cluster_label = np.zeros((10, 10))
+    label_mapping = np.zeros(10) - 1
+
+    for i, prediction in enumerate(result_mnist):
+        cluster_label[prediction, train_labels[i]] += 1
+
+    for i in range(10):
+        label = np.amax(cluster_label)
+        x, y = np.where(cluster_label == label)
+        label_mapping[y] = x
+        for i in range(10):
+            if cluster_label[x, i] > 0:
+                cluster_label[x, i] *= -1
+            if cluster_label[i, y] > 0:
+                cluster_label[i, y] *= -1
+        if cluster_label[x, y] > 0:
+            cluster_label[x, y] *= -1
+
+
+    plot_mnist(p)
+    make_confusion(result_mnist, label_mapping, train_labels)
+    print (label_mapping)
